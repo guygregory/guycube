@@ -4,19 +4,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23111111'/%3E%3Cpath d='M8 8h16v16H8z' fill='%23ffffff'/%3E%3Cpath d='M8 13.33h16M8 18.67h16M13.33 8v16M18.67 8v16' stroke='%23111111' stroke-width='1.5'/%3E%3C/svg%3E" />
   <title>gan-cube-sample</title>
 </head>
 
 <body>
 
-  <div id="app">
+  <!-- Hamburger menu toggle -->
+  <button id="menu-toggle" aria-label="Toggle menu">&#9776;</button>
+
+  <!-- Left-side fly-out panel -->
+  <div id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <span>Settings</span>
+      <button id="sidebar-close" aria-label="Close menu">&times;</button>
+    </div>
 
     <div class="help">
       Scramble cube to arbitrary state then press SPACE or touch Cube
       to activate basic solving timer
     </div>
-
-    <div id="cube"></div>
 
     <div class="controls">
       <button id="connect">Connect</button>
@@ -25,7 +32,6 @@
     </div>
 
     <div class="info">
-
       <label for="deviceName">Device Name</label>
       <input id="deviceName" type="text" readonly value="- n/a -">
 
@@ -58,12 +64,16 @@
 
       <label for="velocity">Angular Velocity</label>
       <input id="velocity" type="text" readonly value="- n/a -">
-
     </div>
-
-    <div id="timer">0:00.000</div>
-
   </div>
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <!-- Main centred content -->
+  <div id="app">
+    <div id="cube"></div>
+    <div id="timer">0:00.000</div>
+  </div>
+
   <script type="module" src="/src/index.ts"></script>
 
 </body>

@@ -20,7 +20,20 @@ import {
   cubeTimestampLinearFit
 } from 'gan-web-bluetooth';
 
+import { cube3x3x3 } from 'cubing/puzzles';
 import { faceletsToPattern, patternToFacelets } from './utils';
+
+// Override default face colours on the cached PuzzleGeometry
+cube3x3x3.pg().then(pg => {
+  (pg as any).colors = {
+    U: '#F8F8F8', // White
+    F: '#2EAD4A', // Green
+    R: '#E53935', // Red
+    D: '#FFD500', // Yellow
+    B: '#1976D2', // Blue
+    L: '#FF8C00', // Orange
+  };
+});
 
 const SOLVED_STATE = "UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB";
 
@@ -251,3 +264,13 @@ $(document).on('keydown', (event) => {
 $("#cube").on('touchstart', () => {
   activateTimer();
 });
+
+// ── Sidebar fly-out toggle ──────────────────
+function toggleSidebar(open: boolean) {
+  $('#sidebar').toggleClass('open', open);
+  $('#sidebar-overlay').toggleClass('open', open);
+}
+
+$('#menu-toggle').on('click', () => toggleSidebar(true));
+$('#sidebar-close').on('click', () => toggleSidebar(false));
+$('#sidebar-overlay').on('click', () => toggleSidebar(false));
