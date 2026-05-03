@@ -20,26 +20,13 @@ import {
   cubeTimestampLinearFit
 } from 'gan-web-bluetooth';
 
-import { cube3x3x3 } from 'cubing/puzzles';
 import { faceletsToPattern, patternToFacelets } from './utils';
-
-// Override default face colours on the cached PuzzleGeometry
-cube3x3x3.pg().then(pg => {
-  (pg as any).colors = {
-    U: '#F8F8F8', // White
-    F: '#2EAD4A', // Green
-    R: '#E53935', // Red
-    D: '#FFD500', // Yellow
-    B: '#1976D2', // Blue
-    L: '#FF8C00', // Orange
-  };
-});
 
 const SOLVED_STATE = "UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB";
 
 var twistyPlayer = new TwistyPlayer({
   puzzle: '3x3x3',
-  visualization: 'PG3D',
+  visualization: '3D',
   alg: '',
   experimentalSetupAnchor: 'start',
   background: 'none',
@@ -51,7 +38,7 @@ var twistyPlayer = new TwistyPlayer({
   cameraLatitudeLimit: 0,
   tempoScale: 5
 });
-twistyPlayer.experimentalFaceletScale = 0.975;
+twistyPlayer.experimentalFaceletScale = 0.985;
 
 $('#cube').append(twistyPlayer);
 
@@ -66,21 +53,120 @@ var materialsPatched = false;
 const HOME_ORIENTATION = new THREE.Quaternion().setFromEuler(new THREE.Euler(15 * Math.PI / 180, -20 * Math.PI / 180, 0));
 var cubeQuaternion: THREE.Quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(30 * Math.PI / 180, -30 * Math.PI / 180, 0));
 
-// GAN i4 matte finish: light gray body, desaturated sticker materials
+// ── GAN i4 appearance: rounded stickers, custom colours, gray body ──
+
+// Rounded-rectangle alpha texture for sticker corners
+// radii: single number or [top-left, top-right, bottom-right, bottom-left]
+function makeRoundedAlpha(radii: number | number[]): THREE.CanvasTexture {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  ctx.clearRect(0, 0, size, size);
+  ctx.fillStyle = 'white';
+  ctx.beginPath();
+  ctx.roundRect(0, 0, size, size, radii);
+  ctx.fill();
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
+const R_SHARP = 14, R_CENTER = 80;
+const stickerAlphaMap    = makeRoundedAlpha(R_SHARP);                           // corner cubies — sharper corners
+const centerAlphaMap     = makeRoundedAlpha(R_CENTER);                          // center tiles — all corners rounded more
+// Edge stickers: the side adjacent to the center gets center-level rounding.
+// In cubie-local space, Y-sticker's top faces center; Z-sticker's bottom faces center.
+const edgeAlphaTopMap    = makeRoundedAlpha([R_CENTER, R_CENTER, R_SHARP, R_SHARP]); // top corners rounded more
+const edgeAlphaBottomMap = makeRoundedAlpha([R_SHARP, R_SHARP, R_CENTER, R_CENTER]); // bottom corners rounded more
+
+// Custom face colours for the GAN i4
+const CUSTOM_FACE_COLORS: Record<string, THREE.Color> = {
+  U: new THREE.Color(0xeeeeee), D: new THREE.Color(0xfcfb58),
+  F: new THREE.Color(0x00cf27), B: new THREE.Color(0x4a6ff6),
+  R: new THREE.Color(0xf75e5d), L: new THREE.Color(0xf9932d),
+};
+
 const GAN_BODY_COLOR = new THREE.Color(0x8a8a8a);
 
-function applyMatteFinish(obj: THREE.Object3D) {
+// Identify which cube face a sticker material belongs to by its default colour.
+// Cube3D default colours (after linear→sRGB conversion applied by the library):
+//   U=white  R≈1 G≈1 B≈1   |  D=yellow R≈1 G≈1 B≈0
+//   R=red    R≈1 G≈0 B≈0   |  L=orange R≈1 G≈.7 B≈0
+//   F=green  R≈0 G≈1 B≈0   |  B=blue   R≈.4 G≈.6 B≈1
+function matchFace(c: THREE.Color): string | null {
+  const { r, g, b } = c;
+  if (r > 0.9 && g > 0.9 && b > 0.9) return 'U';
+  if (r > 0.9 && g > 0.9 && b < 0.1) return 'D';
+  if (r > 0.9 && g < 0.15 && b < 0.15) return 'R';
+  if (r < 0.15 && g > 0.9 && b < 0.15) return 'F';
+  if (r > 0.9 && g > 0.4 && g < 0.85 && b < 0.1) return 'L';
+  if (b > 0.9 && r < 0.5) return 'B';
+  return null;
+}
+
+function applyGanFinish(obj: THREE.Object3D) {
+  const patched = new Set<THREE.MeshBasicMaterial>();
   obj.traverse((child) => {
-    if (child instanceof THREE.Mesh) {
-      const materials = Array.isArray(child.material) ? child.material : [child.material];
-      for (let i = 0; i < materials.length; i++) {
-        const mat = materials[i];
-        if (!mat || !mat.isMaterial) continue;
-        // Foundation (body) pieces are black (color === 0x000000) — make them gray
-        if ('color' in mat && (mat as any).color.getHex() === 0x000000 && mat.visible !== false) {
-          (mat as any).color.copy(GAN_BODY_COLOR);
-        }
-      }
+    if (!('geometry' in child) || !('material' in child)) return;
+    const mesh = child as THREE.Mesh;
+    const mat = mesh.material as THREE.MeshBasicMaterial;
+    if (!mat?.isMaterial || mat.visible === false || !('color' in mat)) return;
+
+    // Foundation (body) pieces — black → gray
+    if (mat.color.getHex() === 0x000000) {
+      mat.color.copy(GAN_BODY_COLOR);
+      return;
+    }
+
+    // Shared sticker materials — recolour + add rounded-corner alpha
+    if (patched.has(mat)) return;
+    const face = matchFace(mat.color);
+    if (face && CUSTOM_FACE_COLORS[face]) {
+      mat.color.copy(CUSTOM_FACE_COLORS[face]);
+      mat.alphaMap = stickerAlphaMap;
+      mat.transparent = true;
+      mat.alphaTest = 0.5;
+      mat.needsUpdate = true;
+      patched.add(mat);
+    }
+  });
+
+  // Center tiles get extra rounding.
+  // Scene → Object3D → Groups. Center cubies have 3 children
+  // (1 foundation + 1 sticker + 1 hint), edges have 5, corners have 7.
+  obj.traverse((group) => {
+    if (!group.children || group.children.length !== 3) return;
+    // Apply rounder alpha to sticker (pos=0.50) — not the hint (pos=1.45)
+    for (const c of group.children) {
+      if (!('geometry' in c) || !('material' in c)) continue;
+      const mesh = c as THREE.Mesh;
+      if (mesh.position.length() < 0.3 || mesh.position.length() > 0.6) continue;
+      const oldMat = mesh.material as THREE.MeshBasicMaterial;
+      if (!oldMat?.alphaMap || oldMat.alphaMap === centerAlphaMap) continue;
+      const centerMat = oldMat.clone();
+      centerMat.alphaMap = centerAlphaMap;
+      centerMat.needsUpdate = true;
+      mesh.material = centerMat;
+    }
+  });
+
+  // Edge stickers: round the 2 corners on the side adjacent to the center.
+  // In cubie-local space every edge has sticker Y at (0,0.50,0) and sticker Z at (0,0,0.50).
+  // Y-sticker's center-facing side is its TOP; Z-sticker's center-facing side is its BOTTOM.
+  obj.traverse((group) => {
+    if (!group.children || group.children.length !== 5) return;
+    for (const c of group.children) {
+      if (!('geometry' in c) || !('material' in c)) continue;
+      const mesh = c as THREE.Mesh;
+      const posLen = mesh.position.length();
+      if (posLen < 0.3 || posLen > 0.6) continue; // skip foundation & hints
+      const oldMat = mesh.material as THREE.MeshBasicMaterial;
+      if (!oldMat?.alphaMap) continue;
+      const isYSticker = mesh.position.y > 0.3;   // (0, 0.50, 0)
+      const edgeMat = oldMat.clone();
+      edgeMat.alphaMap = isYSticker ? edgeAlphaTopMap : edgeAlphaBottomMap;
+      edgeMat.needsUpdate = true;
+      mesh.material = edgeMat;
     }
   });
 }
@@ -92,7 +178,7 @@ async function amimateCubeOrientation() {
     twistyScene = await twistyVantage.scene.scene();
   }
   if (!materialsPatched && twistyScene.children.length > 0) {
-    applyMatteFinish(twistyScene);
+    applyGanFinish(twistyScene);
     materialsPatched = true;
   }
   twistyScene.quaternion.slerp(cubeQuaternion, 0.25);
