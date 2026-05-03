@@ -51,6 +51,7 @@ var twistyPlayer = new TwistyPlayer({
   cameraLatitudeLimit: 0,
   tempoScale: 5
 });
+twistyPlayer.experimentalFaceletScale = 0.975;
 
 $('#cube').append(twistyPlayer);
 
@@ -60,15 +61,39 @@ var solutionMoves: GanCubeMove[] = [];
 
 var twistyScene: THREE.Scene;
 var twistyVantage: any;
+var materialsPatched = false;
 
 const HOME_ORIENTATION = new THREE.Quaternion().setFromEuler(new THREE.Euler(15 * Math.PI / 180, -20 * Math.PI / 180, 0));
 var cubeQuaternion: THREE.Quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(30 * Math.PI / 180, -30 * Math.PI / 180, 0));
+
+// GAN i4 matte finish: light gray body, desaturated sticker materials
+const GAN_BODY_COLOR = new THREE.Color(0x8a8a8a);
+
+function applyMatteFinish(obj: THREE.Object3D) {
+  obj.traverse((child) => {
+    if (child instanceof THREE.Mesh) {
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      for (let i = 0; i < materials.length; i++) {
+        const mat = materials[i];
+        if (!mat || !mat.isMaterial) continue;
+        // Foundation (body) pieces are black (color === 0x000000) — make them gray
+        if ('color' in mat && (mat as any).color.getHex() === 0x000000 && mat.visible !== false) {
+          (mat as any).color.copy(GAN_BODY_COLOR);
+        }
+      }
+    }
+  });
+}
 
 async function amimateCubeOrientation() {
   if (!twistyScene || !twistyVantage) {
     var vantageList = await twistyPlayer.experimentalCurrentVantages();
     twistyVantage = [...vantageList][0];
     twistyScene = await twistyVantage.scene.scene();
+  }
+  if (!materialsPatched && twistyScene.children.length > 0) {
+    applyMatteFinish(twistyScene);
+    materialsPatched = true;
   }
   twistyScene.quaternion.slerp(cubeQuaternion, 0.25);
   twistyVantage.render();
