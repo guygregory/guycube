@@ -1,0 +1,35 @@
+- generic [active] [ref=e1]:
+  - button "Toggle menu" [ref=e2]: ☰
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - text: Settings
+      - button "Close menu" [ref=e5]: ×
+    - generic [ref=e6]: Scramble cube to arbitrary state then press SPACE or touch Cube to activate basic solving timer
+    - generic [ref=e7]:
+      - button "Connect" [ref=e8]
+      - button "Reset State" [ref=e9]
+      - button "Reset Gyro" [ref=e10]
+    - generic [ref=e11]:
+      - text: Device Name
+      - textbox "Device Name" [ref=e12]: "- n/a -"
+      - text: Device MAC
+      - textbox "Device MAC" [ref=e13]: "- n/a -"
+      - text: Hardware Name
+      - textbox "Hardware Name" [ref=e14]: "- n/a -"
+      - text: Hardware Version
+      - textbox "Hardware Version" [ref=e15]: "- n/a -"
+      - text: Software Version
+      - textbox "Software Version" [ref=e16]: "- n/a -"
+      - text: Product Date
+      - textbox "Product Date" [ref=e17]: "- n/a -"
+      - text: Gyro Supported
+      - textbox "Gyro Supported" [ref=e18]: "- n/a -"
+      - text: Battery
+      - textbox "Battery" [ref=e19]: "- n/a -"
+      - text: Clock Skew
+      - textbox "Clock Skew" [ref=e20]: "- n/a -"
+      - text: Quaternion
+      - textbox "Quaternion" [ref=e21]: "- n/a -"
+      - text: Angular Velocity
+      - textbox "Angular Velocity" [ref=e22]: "- n/a -"
+  - generic [ref=e24]: 0:00.000
